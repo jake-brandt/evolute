@@ -10,25 +10,17 @@ const container = new DIContainer();
 // Register canvas
 const mainCanvas = document.getElementById('gameCanvas');
 container.register('canvas', mainCanvas);
+const errorDisplay = document.getElementById('errorDisplay');
 
-// Attempt to get a GL context on the main canvas for any main-thread rendering needs or checks
-// This might be optional if all rendering is offloaded.
-container.registerFactory('gl', (c) => {
-    const canvas = c.resolve('canvas');
-    if (!canvas) {
-        console.error("Canvas element not found for WebGL initialization on main thread.");
-        return null;
+function showError(message) {
+    if (errorDisplay) {
+        errorDisplay.textContent = message;
+        errorDisplay.style.display = 'block';
     }
-    // You might want different GL settings or no GL context at all on main thread
-    // if everything is on workers. For now, let's try to get one.
-    const context = initWebGL(canvas); 
-    if(context){
-        console.log("Main thread WebGL context initialized (potentially for UI or fallback).")
-    }
-    return context;
-});
+    console.error(message); // Also log to console as before
+}
 
-const gl = container.resolve('gl'); // Initialize main thread GL context (if needed)
+let isMainCanvasTransferredToWorker = false;
 
 // --- Worker Setup ---
 let physicsWorker = null;
@@ -58,10 +50,18 @@ if (window.Worker) {
     renderWorker = new Worker('./src/render-worker.js', { type: 'module' });
     renderWorker.onmessage = function(event) {
         console.log("Main thread received from render worker:", event.data);
-        // Handle messages from render worker (e.g., status, errors)
+        const status = event.data.status;
+        if (status) {
+            if (status.includes("failed") || status.includes("not provided") || status.includes("not available")) {
+                showError(`Render Worker: ${status}`);
+            } else {
+                console.log(`Render Worker status: ${status}`);
+            }
+        }
+        // Handle other messages from render worker (e.g., status, errors)
     };
     renderWorker.onerror = function(error) {
-        console.error("Error in render worker:", error.message, error.filename, error.lineno);
+        showError(`Error in render worker: ${error.message} (File: ${error.filename}, Line: ${error.lineno})`);
     };
 
     // Initialize Render Worker with OffscreenCanvas
@@ -70,20 +70,47 @@ if (window.Worker) {
             const offscreenCanvas = mainCanvas.transferControlToOffscreen();
             renderWorker.postMessage({ type: 'init', payload: { canvas: offscreenCanvas } }, [offscreenCanvas]);
             console.log("OffscreenCanvas transferred to render worker.");
+            isMainCanvasTransferredToWorker = true;
         } catch (e) {
-            console.error("Could not transfer canvas to offscreen worker. Error:", e);
-            // Fallback or error handling if OffscreenCanvas is not supported or fails
-            // For now, we'll let the render worker report its status.
+            showError(`Error transferring canvas to offscreen worker: ${e.message}. Attempting fallback.`);
+            // console.error("OffscreenCanvas transfer failed. Error:", e, "Falling back to using main canvas for render worker."); // Original console log
+            renderWorker.postMessage({ type: 'init', payload: { canvas: mainCanvas } });
+            isMainCanvasTransferredToWorker = true;
         }
     } else {
-        console.warn("OffscreenCanvas is not supported by this browser. Render worker might not function as intended.");
-        // Send a null canvas or handle differently if OffscreenCanvas is critical
-        renderWorker.postMessage({ type: 'init', payload: { canvas: null } });
+        showError("OffscreenCanvas is not supported by this browser. Attempting fallback for render worker, but performance might be affected.");
+        // console.warn("OffscreenCanvas is not supported by this browser. Falling back to using main canvas for render worker."); // Original console log
+        renderWorker.postMessage({ type: 'init', payload: { canvas: mainCanvas } });
+        isMainCanvasTransferredToWorker = true;
     }
 
 } else {
-    console.error("Web Workers are not supported in this browser. Game functionality will be limited.");
+    showError("Web Workers are not supported in this browser. Game functionality will be severely limited or unavailable.");
+    // console.error("Web Workers are not supported in this browser. Game functionality will be limited."); // Original console log
 }
+
+// Attempt to get a GL context on the main canvas ONLY if it wasn't transferred.
+if (!isMainCanvasTransferredToWorker) {
+    container.registerFactory('gl', (c) => {
+        const canvas = c.resolve('canvas');
+        if (!canvas) {
+            showError("Main thread: Canvas element not found for WebGL initialization.");
+            return null;
+        }
+        const context = initWebGL(canvas);
+        if (!context) {
+            showError("Main thread: Unable to initialize WebGL. Your browser may not support it, or the canvas is in use by a worker.");
+            return null;
+        }
+        console.log("Main thread WebGL context initialized (potentially for UI or fallback).")
+        return context;
+    });
+    const gl = container.resolve('gl'); // Initialize main thread GL context (could be null)
+} else {
+    container.register('gl', null); // Ensure 'gl' resolves to null if canvas is with worker
+    // console.log("Main thread WebGL context not initialized because canvas is with render worker."); // Original console log, showError not needed here as it's an expected state.
+}
+
 
 // --- Game Loop ---
 let lastTime = 0;
