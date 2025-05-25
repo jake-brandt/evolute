@@ -12,6 +12,8 @@ self.onmessage = function(event) {
 
     if (type === 'init') {
         canvas = payload.canvas;
+        console.log("Render worker: Received message payload for 'init':", payload);
+        console.log("Render worker: Canvas object received:", canvas);
         if (canvas) {
             gl = initWebGL(canvas);
             if (gl) {

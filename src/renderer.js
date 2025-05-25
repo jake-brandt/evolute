@@ -6,16 +6,28 @@
  * @returns {WebGLRenderingContext | null} The WebGL context or null if initialization fails.
  */
 function initWebGL(canvas) {
+    let logPrefix = (typeof self !== 'undefined' && self.constructor.name === 'DedicatedWorkerGlobalScope') ? "[Worker] " : "[Main] ";
+    console.log(logPrefix + "initWebGL called with canvas:", canvas);
+
     let gl = null;
     try {
-        // Try to grab the standard context. If it fails, fallback to experimental.
-        gl = canvas.getContext("webgl") || canvas.getContext("experimental-webgl");
+        console.log(logPrefix + "Attempting to get 'webgl' context");
+        gl = canvas.getContext("webgl");
+        console.log(logPrefix + "'webgl' context result:", gl);
+
+        if (!gl) {
+            console.log(logPrefix + "Attempting to get 'experimental-webgl' context");
+            gl = canvas.getContext("experimental-webgl");
+            console.log(logPrefix + "'experimental-webgl' context result:", gl);
+        }
     } catch (e) {
-        console.error("WebGL context initialization error:", e);
+        // Log the error with prefix, but the main error handling for !gl follows
+        console.error(logPrefix + "WebGL context initialization error during getContext:", e);
     }
 
     if (!gl) {
-        alert("Unable to initialize WebGL. Your browser may not support it.");
+        // alert("Unable to initialize WebGL. Your browser may not support it."); // Commented out as per instructions
+        console.error(logPrefix + "Unable to initialize WebGL. Your browser may not support it or the canvas is already in use.");
         return null;
     }
 
@@ -28,7 +40,7 @@ function initWebGL(canvas) {
     // Clear the color as well as the depth buffer.
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
-    console.log("WebGL initialized.");
+    console.log(logPrefix + "WebGL initialized.");
     return gl;
 }
 
