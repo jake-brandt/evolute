@@ -122,9 +122,12 @@ self.onmessage = function(event) {
 
             // Initialize matrices
             const aspectRatio = canvas.width / canvas.height;
+            console.log("Render Worker (Init): aspectRatio:", aspectRatio);
             mat4.perspective(projectionMatrix, Math.PI / 4, aspectRatio, 0.1, 100.0);
+            console.log("Render Worker (Init): projectionMatrix:", projectionMatrix);
             mat4.lookAt(viewMatrix, [0, 1, 3], [0, 0, 0], [0, 1, 0]); // Camera at (0,1,3), looking at origin, up is Y
-            mat4.identity(modelMatrix);
+            console.log("Render Worker (Init): viewMatrix:", viewMatrix);
+            mat4.identity(modelMatrix); // modelMatrix is initialized here but logged per-frame
             
             self.postMessage({ status: "Render worker: Cube assets and matrices initialized." });
 
@@ -149,11 +152,18 @@ self.onmessage = function(event) {
         // Update Model Matrix
         mat4.identity(modelMatrix);
         mat4.rotateY(modelMatrix, modelMatrix, cubeRotationY);
+        console.log("Render Worker (renderScene): modelMatrix:", modelMatrix);
         // Example translation: mat4.translate(modelMatrix, modelMatrix, [0, 0, -2]); // Moves cube 2 units away
 
         // Calculate MVP Matrix
         mat4.multiply(mvpMatrix, viewMatrix, modelMatrix);      // mvpMatrix = viewMatrix * modelMatrix
         mat4.multiply(mvpMatrix, projectionMatrix, mvpMatrix); // mvpMatrix = projectionMatrix * mvpMatrix (which is view * model)
+        
+        console.log("Render Worker: Calling render with mvpMatrix:", mvpMatrix);
+        console.log("Render Worker: shaderProgram:", shaderProgram);
+        console.log("Render Worker: attributeLocations:", attributeLocations);
+        console.log("Render Worker: uniformLocations:", uniformLocations);
+        console.log("Render Worker: cubeBuffers:", cubeBuffers);
         
         render(gl, shaderProgram, attributeLocations, uniformLocations, cubeBuffers, mvpMatrix);
         // self.postMessage({ status: "Scene rendered" }); // Optional
