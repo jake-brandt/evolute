@@ -13,9 +13,8 @@ export const vertexShaderSource = `
 
 export const fragmentShaderSource = `
     precision mediump float;
-    varying vec3 v_color;
     void main() {
-        gl_FragColor = vec4(v_color, 1.0);
+        gl_FragColor = vec4(1.0, 0.0, 0.0, 1.0); /* Solid Red */
     }
 `;
 
@@ -143,6 +142,7 @@ function render(gl, program, attributeLocations, uniformLocations, buffers, mvpM
     // gl.enable(gl.DEPTH_TEST); // Set in initWebGL
     // gl.depthFunc(gl.LEQUAL); // Set in initWebGL
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+    // gl.disable(gl.DEPTH_TEST);
 
     // 2. Set Viewport
     gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
