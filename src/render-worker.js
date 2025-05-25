@@ -17,7 +17,7 @@ self.onmessage = function(event) {
             if (gl) {
                 self.postMessage({ status: "Render worker initialized and WebGL context created." });
             } else {
-                self.postMessage({ status: "Render worker failed to initialize WebGL." });
+                self.postMessage({ status: "Render worker: WebGL initialization failed on the provided canvas." });
                 console.error("Render worker: WebGL initialization failed.");
             }
         } else {
