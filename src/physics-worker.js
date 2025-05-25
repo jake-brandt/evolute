@@ -1,6 +1,9 @@
 // Physics Worker
 console.log("Physics worker script loaded.");
 
+let cubeRotationY = 0;
+const rotationSpeed = Math.PI / 4; // Radians per second
+
 self.onmessage = function(event) {
     console.log("Physics worker received message:", event.data);
 
@@ -13,9 +16,13 @@ self.onmessage = function(event) {
         self.postMessage({ status: "Physics initialized" });
     } else if (type === 'updateState') {
         // Update physics state based on payload (e.g., deltaTime, input)
-        // world.step(payload.deltaTime);
-        // const newState = world.getState();
-        const newState = { /* placeholder new state */ }; // Replace with actual state
+        const deltaTime = payload.deltaTime || (1/60); // Default to 60 FPS if deltaTime not provided
+        cubeRotationY += rotationSpeed * deltaTime;
+        
+        const newState = { 
+            cubeRotationY: cubeRotationY 
+            // Add other state variables here if needed
+        };
         self.postMessage({ type: "physicsUpdate", state: newState });
     }
     // Add more message types as needed
