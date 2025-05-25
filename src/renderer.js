@@ -190,4 +190,4 @@ function render(gl, program, attributeLocations, uniformLocations, buffers, mvpM
     gl.drawElements(gl.TRIANGLES, vertexCount, gl.UNSIGNED_SHORT, 0);
 }
 
-export { initWebGL, render, vertexShaderSource, fragmentShaderSource, compileShader, createProgram };
+export { initWebGL, render };
