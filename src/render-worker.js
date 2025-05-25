@@ -39,9 +39,10 @@ self.onmessage = function(event) {
     const { type, payload } = event.data;
 
     if (type === 'init') {
-        canvas = payload.canvas;
-        console.log("Render worker: Received message payload for 'init':", payload);
-        console.log("Render worker: Canvas object received:", canvas);
+        try {
+            canvas = payload.canvas;
+            console.log("Render worker: Received message payload for 'init':", payload);
+            console.log("Render worker: Canvas object received:", canvas);
         if (canvas) {
             gl = initWebGL(canvas);
             if (!gl) {
@@ -135,38 +136,47 @@ self.onmessage = function(event) {
             self.postMessage({ status: "Render worker: Canvas not provided." });
             console.error("Render worker: Canvas not received.");
         }
+        } catch (e) {
+            console.error("Render worker error during init:", e);
+            self.postMessage({ type: 'workerError', error: { message: e.message, name: e.name, stack: e.stack, details: e.toString() } });
+        }
     } else if (type === 'renderScene') {
-        if (!gl || !shaderProgram || !cubeBuffers.vertex || !payload.sceneData || !payload.sceneData.hasOwnProperty('cubeRotationY')) {
-            let errorMsg = "Render worker: Cannot render scene. Missing or invalid data: ";
-            if (!gl) errorMsg += "WebGL context, ";
+        try {
+            if (!gl || !shaderProgram || !cubeBuffers.vertex || !payload.sceneData || !payload.sceneData.hasOwnProperty('cubeRotationY')) {
+                let errorMsg = "Render worker: Cannot render scene. Missing or invalid data: ";
+                if (!gl) errorMsg += "WebGL context, ";
             if (!shaderProgram) errorMsg += "Shader program, ";
             if (!cubeBuffers.vertex) errorMsg += "Vertex buffer (implies others also missing), ";
             if (!payload.sceneData) errorMsg += "Scene data, ";
             if (payload.sceneData && !payload.sceneData.hasOwnProperty('cubeRotationY')) errorMsg += "cubeRotationY in scene data, ";
-            console.error(errorMsg.slice(0, -2) + ".");
-            return;
+                console.error(errorMsg.slice(0, -2) + ".");
+                return;
+            }
+
+            const cubeRotationY = payload.sceneData.cubeRotationY;
+
+            // Update Model Matrix
+            mat4.identity(modelMatrix);
+            mat4.rotateY(modelMatrix, modelMatrix, cubeRotationY);
+            console.log("Render Worker (renderScene): modelMatrix:", modelMatrix);
+            // Example translation: mat4.translate(modelMatrix, modelMatrix, [0, 0, -2]); // Moves cube 2 units away
+
+            // Calculate MVP Matrix
+            mat4.multiply(mvpMatrix, viewMatrix, modelMatrix);      // mvpMatrix = viewMatrix * modelMatrix
+            mat4.multiply(mvpMatrix, projectionMatrix, mvpMatrix); // mvpMatrix = projectionMatrix * mvpMatrix (which is view * model)
+            
+            console.log("Render Worker: Calling render with mvpMatrix:", mvpMatrix);
+            console.log("Render Worker: shaderProgram:", shaderProgram);
+            console.log("Render Worker: attributeLocations:", attributeLocations);
+            console.log("Render Worker: uniformLocations:", uniformLocations);
+            console.log("Render Worker: cubeBuffers:", cubeBuffers);
+            
+            render(gl, shaderProgram, attributeLocations, uniformLocations, cubeBuffers, mvpMatrix);
+            // self.postMessage({ status: "Scene rendered" }); // Optional
+        } catch (e) {
+            console.error("Render worker error during renderScene:", e);
+            self.postMessage({ type: 'workerError', error: { message: e.message, name: e.name, stack: e.stack, details: e.toString() } });
         }
-
-        const cubeRotationY = payload.sceneData.cubeRotationY;
-
-        // Update Model Matrix
-        mat4.identity(modelMatrix);
-        mat4.rotateY(modelMatrix, modelMatrix, cubeRotationY);
-        console.log("Render Worker (renderScene): modelMatrix:", modelMatrix);
-        // Example translation: mat4.translate(modelMatrix, modelMatrix, [0, 0, -2]); // Moves cube 2 units away
-
-        // Calculate MVP Matrix
-        mat4.multiply(mvpMatrix, viewMatrix, modelMatrix);      // mvpMatrix = viewMatrix * modelMatrix
-        mat4.multiply(mvpMatrix, projectionMatrix, mvpMatrix); // mvpMatrix = projectionMatrix * mvpMatrix (which is view * model)
-        
-        console.log("Render Worker: Calling render with mvpMatrix:", mvpMatrix);
-        console.log("Render Worker: shaderProgram:", shaderProgram);
-        console.log("Render Worker: attributeLocations:", attributeLocations);
-        console.log("Render Worker: uniformLocations:", uniformLocations);
-        console.log("Render Worker: cubeBuffers:", cubeBuffers);
-        
-        render(gl, shaderProgram, attributeLocations, uniformLocations, cubeBuffers, mvpMatrix);
-        // self.postMessage({ status: "Scene rendered" }); // Optional
     }
     // Add more message types as needed
 };
