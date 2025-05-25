@@ -12,12 +12,37 @@ const mainCanvas = document.getElementById('gameCanvas');
 container.register('canvas', mainCanvas);
 const errorDisplay = document.getElementById('errorDisplay');
 
-function showError(message) {
+function showError(errorData) {
     if (errorDisplay) {
-        errorDisplay.textContent = message;
+        let displayMessage = "An error occurred.";
+        if (typeof errorData === 'string') {
+            displayMessage = errorData;
+        } else if (errorData && typeof errorData === 'object') {
+            // Prefer more specific details if available
+            const name = errorData.name || "Error";
+            const message = errorData.message || "No message provided.";
+            const filename = errorData.filename || (errorData.fileName) || 'N/A'; // fileName for some error objects
+            const lineno = errorData.lineno || (errorData.lineNumber) || 'N/A'; // lineNumber for some error objects
+            const stack = errorData.stack || "";
+
+            if (name === "WorkerRuntimeError") { // Error from renderWorker.onerror
+                 displayMessage = `${name}: ${message} (File: ${filename}, Line: ${lineno})`;
+            } else { // Error from workerError postMessage or other object
+                displayMessage = `${name}: ${message}`;
+                if (stack) {
+                    // Keep stack short for display, full stack is in console.
+                    displayMessage += `\nStack (first line): ${stack.split('\n')[0]}`;
+                }
+            }
+        }
+        
+        errorDisplay.textContent = displayMessage;
         errorDisplay.style.display = 'block';
+        console.error("showError displayed:", errorData); // Log the full errorData object to console
+    } else {
+        // Fallback if errorDisplay element isn't found for some reason
+        console.error("Error display element not found. Original error:", errorData);
     }
-    console.error(message); // Also log to console as before
 }
 
 let isMainCanvasTransferredToWorker = false;
@@ -49,19 +74,52 @@ if (window.Worker) {
     // Render Worker
     renderWorker = new Worker('./src/render-worker.js', { type: 'module' });
     renderWorker.onmessage = function(event) {
-        console.log("Main thread received from render worker:", event.data);
-        const status = event.data.status;
-        if (status) {
-            if (status.includes("failed") || status.includes("not provided") || status.includes("not available")) {
-                showError(`Render Worker: ${status}`);
-            } else {
-                console.log(`Render Worker status: ${status}`);
+        if (event.data && event.data.type === 'workerError') {
+            const error = event.data.error;
+            console.error("Received error from render worker:", error);
+            // Format the error object for display, including stack if available
+            let errorMessage = `Render Worker Error: ${error.name || 'Unknown Error'} - ${error.message || 'No message'}`;
+            if (error.stack) {
+                errorMessage += `\nStack: ${error.stack}`;
+            } else if (error.details) {
+                errorMessage += `\nDetails: ${error.details}`;
             }
+            showError(errorMessage);
+        } else if (event.data && event.data.status) { // Existing status handling
+            const status = event.data.status;
+            // Log interesting statuses, including successful initializations
+            if (status.includes("failed") || status.includes("not provided") || status.includes("not available") || status.includes("initialized")) {
+                 console.log("Main thread received status from render worker:", status);
+                 // Show error for specific failure statuses
+                 if (status.includes("failed") || status.includes("not provided") || status.includes("not available")) {
+                    showError(`Render Worker: ${status}`);
+                 }
+            } else {
+                // Log other general statuses if not already logged above
+                console.log("Main thread received status from render worker (other):", status);
+            }
+        } else {
+            // Handle other types of messages if any
+            console.log("Main thread received unhandled message from render worker:", event.data);
         }
-        // Handle other messages from render worker (e.g., status, errors)
     };
-    renderWorker.onerror = function(error) {
-        showError(`Error in render worker: ${error.message} (File: ${error.filename}, Line: ${error.lineno})`);
+    renderWorker.onerror = function(event) {
+        console.error("Raw error caught in render worker by onerror:", event);
+        // Attempt to prevent default handling that might show a less informative error
+        event.preventDefault(); 
+        
+        let errorMessage = 'Unknown error in render worker.';
+        if (event.message) {
+            errorMessage = event.message;
+        }
+        
+        const errorDetails = {
+            message: errorMessage,
+            filename: event.filename || 'N/A',
+            lineno: event.lineno || 'N/A',
+            name: "WorkerRuntimeError" // Generic name for errors caught by .onerror
+        };
+        showError(errorDetails);
     };
 
     // Initialize Render Worker with OffscreenCanvas
